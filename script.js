@@ -2,6 +2,8 @@ mapboxgl.accessToken = 'pk.eyJ1Ijoid2VuLWhpbiIsImEiOiJjbDFtOHZoYW8waWE5M2pqeGg3d
 
 // Used to hold all newly created points' coordinates
 let coordinates = []
+let id = []
+let index = 0
 
 /**
  * RouteCreationControl - Allows the user to turn on/off to add points on the map
@@ -27,8 +29,20 @@ class RouteCreationControl {
             this.container.textContent = this.isDrawing ? 'Drawing' : 'Draw';
             if (this.isDrawing) {
                 this.map.on('click', addPoint)
+
+                coordinates = []
+                id = []
+                index = 0
             } else {
                 this.map.off('click', addPoint)
+
+                this.map.removeLayer('route')
+                this.map.removeSource('route')
+
+                for (let i = 0; i < index; i++) {
+                    this.map.removeLayer(i.toString())
+                    this.map.removeSource(i.toString())
+                }
             }
         })
         return this.container;
@@ -48,7 +62,7 @@ function addPoint(event) {
 
     // Add the circle on the map
     map.addLayer({
-    id: event.lngLat.toString(),
+    id: index.toString(),
     type: 'circle',
     source: {
         type: 'geojson',
@@ -74,7 +88,8 @@ function addPoint(event) {
 
     // Adds the coordinates to the array initialized above
     coordinates.push(coords)
-
+    id.push(index)
+    index++
     // Draws the route using the newly updated array
     getRoute(coordinates);
 }
@@ -84,10 +99,7 @@ function findRoute(coordinates) {
     let result = ''
     for (let i = 0; i < coordinates.length; i++) {
         let temp = coordinates[i]
-        if (i != coordinates.length - 1)
-            result += `${temp[0]},${temp[1]};`
-        else
-            result += `${temp[0]},${temp[1]}`
+        result += (i != coordinates.length - 1) ? `${temp[0]},${temp[1]};` : `${temp[0]},${temp[1]}`
     }
 
     return result
@@ -100,7 +112,7 @@ async function getRoute(coordinates) {
     // an arbitrary start will always be the same
     // only the end or destination will change
     const query = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/driving/${start[0]},${start[1]};${result}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`,
+        `https://api.mapbox.com/directions/v5/mapbox/driving/${result}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`,
         { method: 'GET' }
     );
     const json = await query.json();
@@ -152,37 +164,8 @@ const map = new mapboxgl.Map({
     zoom: 15
 });
 
-// 3. Create an initial coordinate (only used in this version)
-const start = [-73.561668, 45.508888];
-
-// 4. Load the initial coordinate as a point on the map
+// 3. Load the initial coordinate as a point on the map
 map.on('load', () => {
-
-    // Add starting point to the map
-    map.addLayer({
-        id: 'point',
-        type: 'circle',
-        source: {
-            type: 'geojson',
-            data: {
-                type: 'FeatureCollection',
-                features: [
-                {
-                    type: 'Feature',
-                    properties: {},
-                    geometry: {
-                        type: 'Point',
-                        coordinates: start
-                    }
-                }]
-            }
-        },
-        paint: {
-            'circle-radius': 10,
-            'circle-color': '#3887be'
-        }
-    });
-}); 
-
-// 5. Add the control to the map
-map.addControl(routeCreationControl)
+    // 3.1. Add the control to the map
+    map.addControl(routeCreationControl)
+});
