@@ -6,7 +6,8 @@ let coordinates = []
 let id = []
 // Used to create an id for each point
 let index = 0
-let selectedFeature
+// Used to track the current selected layer id
+let selectedLayerId
 
 /**
  * RouteCreationControl - Allows the user to turn on/off to add points on the map
@@ -69,54 +70,12 @@ class RouteCreationControl {
     }
 }
 
-function resetDrawing() {
-    coordinates = []
-    id = []
-    index = 0
-}
-
-function findLayer(event, layers) {
-    let result = map.queryRenderedFeatures(
-        [
-            [event.point.x - 20, event.point.y - 20],
-            [event.point.x + 20, event.point.y + 20]
-        ], 
-        { layers: layers }
-    )
-    if (result.length === 0) return
-    return result[0].layer.id
-}
-
-function onMove(event) {
-    const coords = Object.keys(event.lngLat).map((key) => event.lngLat[key]);
-    const geojson = {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-            type: 'Point',
-            coordinates: coords
-        }
-    };
-    canvas.style.cursor = 'grabbing'
-    if (map.getSource(selectedFeature))
-        map.getSource(selectedFeature).setData(geojson)
-    coordinates[selectedFeature] = coords
-    getRoute(coordinates)
-}
-
-function onUp() {
-    canvas.style.cursor = ''
-
-    map.off('mousemove', onMove)
-    map.off('touchmove', onMove)
-}
-
 // Adds a point to the map
 function addPoint(event) {
     // Creates the coordinate of the event
     const coords = Object.keys(event.lngLat).map((key) => event.lngLat[key]);
     const indexID = index.toString()
-    // Add the circle on the map
+    // Adds the circle on the map
     map.addLayer({
         id: indexID,
         type: 'circle',
@@ -143,17 +102,17 @@ function addPoint(event) {
     });
 
     // Change the style of the point and the cursor when the mouse enters the position of the point
-    // indexID - target of the event (remain unsure of its real purpose)
+    // indexID - target of the event
     map.on('mouseenter', indexID, (event) => {
-        selectedFeature = findLayer(event, id)
-        map.setPaintProperty(selectedFeature, 'circle-color', '#3bb2d0')
+        selectedLayerId = findClosestLayerId(event, id)
+        map.setPaintProperty(selectedLayerId, 'circle-color', '#3bb2d0')
         canvas.style.cursor = 'move'
     })
 
     // Change the style of the point and the cursor when the mouse leaves the position of the point
     map.on('mouseleave', indexID, (event) => {
-        selectedFeature = findLayer(event, id)
-        map.setPaintProperty(selectedFeature, 'circle-color', '#f30')
+        selectedLayerId = findClosestLayerId(event, id)
+        map.setPaintProperty(selectedLayerId, 'circle-color', '#f30')
         canvas.style.cursor = ''
     })
 
@@ -163,7 +122,7 @@ function addPoint(event) {
         event.preventDefault()
 
         canvas.style.cursor = 'grab'
-        selectedFeature = findLayer(event, id)
+        selectedLayerId = findClosestLayerId(event, id)
         // Updates the coordinates of the point while moving the mouse
         map.on('mousemove', onMove)
         map.once('mouseup', onUp)
@@ -174,7 +133,7 @@ function addPoint(event) {
         if (event.points.length !== 1) return
 
         event.preventDefault()
-        selectedFeature = findLayer(event, id)
+        selectedLayerId = findClosestLayerId(event, id)
         map.on('touchmove', onMove)
         map.on('touchend', onUp)
     })
@@ -187,19 +146,8 @@ function addPoint(event) {
     getRoute(coordinates);
 }
 
-// Find the route using all coordinates (except for the starting coordinate)
-function findRoute(coordinates) {
-    let result = ''
-    for (let i = 0; i < coordinates.length; i++) {
-        let temp = coordinates[i]
-        result += (i != coordinates.length - 1) ? `${temp[0]},${temp[1]};` : `${temp[0]},${temp[1]}`
-    }
-    return result
-}
-
 // API call to draw the route using the array of coordinates
 async function getRoute(coordinates) {
-
     if (coordinates.length > 1) {
         let result = findRoute(coordinates)
         // make a directions request using cycling profile
@@ -223,7 +171,7 @@ async function getRoute(coordinates) {
 
         // if the route already exists on the map, we'll reset it using setData
         if (map.getSource('route'))
-            map.getSource('route').setData(geojson);
+        map.getSource('route').setData(geojson);
         // otherwise, we'll make a new request
         else {
             map.addLayer({
@@ -247,6 +195,10 @@ async function getRoute(coordinates) {
     }
 }
 
+/**
+ * MAIN SECTION - Initializing the map
+ */
+
 // 1. Create the instance of the map control
 const routeCreationControl = new RouteCreationControl(false);
 
@@ -267,3 +219,64 @@ map.on('load', () => {
     // 4.1. Add the control to the map
     map.addControl(routeCreationControl)
 });
+
+
+/**
+ * HELPER METHODS
+ */
+
+// Resets the values holding the previous points
+function resetDrawing() {
+    coordinates = []
+    id = []
+    index = 0
+}
+
+// Find the closest layer id to the user's mouse position
+function findClosestLayerId(event, layers) {
+    let result = map.queryRenderedFeatures(
+        [
+            [event.point.x - 20, event.point.y - 20],
+            [event.point.x + 20, event.point.y + 20]
+        ], 
+        { layers: layers }
+    )
+    if (result.length === 0) return
+    return result[0].layer.id
+}
+
+// Updates the position of the point to the user's mouse position
+function onMove(event) {
+    const coords = Object.keys(event.lngLat).map((key) => event.lngLat[key]);
+    const geojson = {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+            type: 'Point',
+            coordinates: coords
+        }
+    };
+    canvas.style.cursor = 'grabbing'
+    if (map.getSource(selectedLayerId))
+        map.getSource(selectedLayerId).setData(geojson)
+    coordinates[selectedLayerId] = coords
+    getRoute(coordinates)
+}
+
+// Cancels the drag listener on the user's mouse
+function onUp() {
+    canvas.style.cursor = ''
+
+    map.off('mousemove', onMove)
+    map.off('touchmove', onMove)
+}
+
+// Find the route using all coordinates (except for the starting coordinate)
+function findRoute(coordinates) {
+    let result = ''
+    for (let i = 0; i < coordinates.length; i++) {
+        let temp = coordinates[i]
+        result += (i != coordinates.length - 1) ? `${temp[0]},${temp[1]};` : `${temp[0]},${temp[1]}`
+    }
+    return result
+}
