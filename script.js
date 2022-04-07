@@ -1,5 +1,7 @@
 mapboxgl.accessToken = 'pk.eyJ1Ijoid2VuLWhpbiIsImEiOiJjbDFwNnQ1NWMxYmw5M2NzOW5hdmU2OTNsIn0.Qj1R_teCIRQ-h3YxP_Hfnw';
 
+// Used to hold all coordinates of each point
+let coordinates = []
 // Used to hold all ids of each point
 let id = []
 // Used to create an id for each point
@@ -68,6 +70,7 @@ class RouteCreationControl {
 }
 
 function resetDrawing() {
+    coordinates = []
     id = []
     index = 0
 }
@@ -97,9 +100,11 @@ function onMove(event) {
     canvas.style.cursor = 'grabbing'
     if (map.getSource(selectedFeature))
         map.getSource(selectedFeature).setData(geojson)
+    coordinates[selectedFeature] = coords
+    getRoute(coordinates)
 }
 
-function onUp(event) {
+function onUp() {
     canvas.style.cursor = ''
 
     map.off('mousemove', onMove)
@@ -118,53 +123,53 @@ function addPoint(event) {
         source: {
             type: 'geojson',
             data: {
-            type: 'FeatureCollection',
-            features: [
-                {
-                    type: 'Feature',
-                    properties: {},
-                    geometry: {
-                        type: 'Point',
-                        coordinates: coords
+                type: 'FeatureCollection',
+                features: [
+                    {
+                        type: 'Feature',
+                        properties: {},
+                        geometry: {
+                            type: 'Point',
+                            coordinates: coords
+                        }
                     }
-                }
-            ]
+                ]
             }
         },
         paint: {
             'circle-radius': 10,
             'circle-color': '#f30'
-            }
+        }
     });
 
-    // 4.2. Change the style of the point and the cursor when the mouse enters the position of the point
-    // 'point' - target of the event (remain unsure of its real purpose)
+    // Change the style of the point and the cursor when the mouse enters the position of the point
+    // indexID - target of the event (remain unsure of its real purpose)
     map.on('mouseenter', indexID, (event) => {
         selectedFeature = findLayer(event, id)
         map.setPaintProperty(selectedFeature, 'circle-color', '#3bb2d0')
         canvas.style.cursor = 'move'
     })
 
-    // 4.3. Change the style of the point and the cursor when the mouse leaves the position of the point
+    // Change the style of the point and the cursor when the mouse leaves the position of the point
     map.on('mouseleave', indexID, (event) => {
         selectedFeature = findLayer(event, id)
         map.setPaintProperty(selectedFeature, 'circle-color', '#f30')
         canvas.style.cursor = ''
     })
 
-    // 4.4. Move the point when the user presses on the point
+    // Move the point when the user presses on the point
     map.on('mousedown', indexID, (event) => {
         // Prevent the user to drag the map
         event.preventDefault()
 
         canvas.style.cursor = 'grab'
         selectedFeature = findLayer(event, id)
-        // 4.4.1 Updates the coordinates of the point while moving the mouse
+        // Updates the coordinates of the point while moving the mouse
         map.on('mousemove', onMove)
         map.once('mouseup', onUp)
     })
 
-    // 4.5. Move the point when the user presses on the point
+    // Move the point when the user presses on the point
     map.on('touchstart', indexID, (event) => {
         if (event.points.length !== 1) return
 
@@ -175,11 +180,11 @@ function addPoint(event) {
     })
 
     // Adds the coordinates to the array initialized above
+    coordinates.push(coords)
     id.push(index.toString())
     index++
     // Draws the route using the newly updated array
-
-    getRoute();
+    getRoute(coordinates);
 }
 
 // Find the route using all coordinates (except for the starting coordinate)
@@ -189,19 +194,11 @@ function findRoute(coordinates) {
         let temp = coordinates[i]
         result += (i != coordinates.length - 1) ? `${temp[0]},${temp[1]};` : `${temp[0]},${temp[1]}`
     }
-
     return result
 }
 
 // API call to draw the route using the array of coordinates
-async function getRoute() {
-    let coordinates = []
-    id.forEach ( element => {
-        if (map.getSource(element)) {
-            let feature = map.querySourceFeatures(element)
-            console.log(feature)
-        }
-    })
+async function getRoute(coordinates) {
 
     if (coordinates.length > 1) {
         let result = findRoute(coordinates)
