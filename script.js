@@ -1,11 +1,10 @@
 mapboxgl.accessToken = 'pk.eyJ1Ijoid2VuLWhpbiIsImEiOiJjbDFwNnQ1NWMxYmw5M2NzOW5hdmU2OTNsIn0.Qj1R_teCIRQ-h3YxP_Hfnw';
 
-// Used to hold all newly created points' coordinates
-let coordinates = []
 // Used to hold all ids of each point
 let id = []
 // Used to create an id for each point
 let index = 0
+let selectedFeature
 
 /**
  * RouteCreationControl - Allows the user to turn on/off to add points on the map
@@ -38,19 +37,23 @@ class RouteCreationControl {
             } else {
                 // Unregister the click
                 // NOTE: USE THE SAME TYPE AND LISTENER TO REMOVE THE PROPER LISTENER
-                map.off('click', addPoint)
+                this.map.off('click', addPoint)
                 
                 // Remove the route
                 // Layer - the drawing of the point
                 // Source - the "tag" of the point
                 // NOTE: CANNOT REMOVE LAYER IF YOU REMOVE ITS TAG (Source)
-                map.removeLayer('route')
-                map.removeSource('route')
+                if (this.map.getSource('route')) {
+                    this.map.removeLayer('route')
+                    this.map.removeSource('route')
+                }
 
                 // Remove all points
                 for (let i = 0; i < index; i++) {
-                    map.removeLayer(i.toString())
-                    map.removeSource(i.toString())
+                    if (this.map.getSource(i.toString())) {
+                        this.map.removeLayer(i.toString())
+                        this.map.removeSource(i.toString())
+                    }
                 }
             }
         })
@@ -65,12 +68,23 @@ class RouteCreationControl {
 }
 
 function resetDrawing() {
-    coordinates = []
     id = []
     index = 0
 }
 
-function onMove(event, id) {
+function findLayer(event, layers) {
+    let result = map.queryRenderedFeatures(
+        [
+            [event.point.x - 20, event.point.y - 20],
+            [event.point.x + 20, event.point.y + 20]
+        ], 
+        { layers: layers }
+    )
+    if (result.length === 0) return
+    return result[0].layer.id
+}
+
+function onMove(event) {
     const coords = Object.keys(event.lngLat).map((key) => event.lngLat[key]);
     const geojson = {
         type: 'Feature',
@@ -81,8 +95,8 @@ function onMove(event, id) {
         }
     };
     canvas.style.cursor = 'grabbing'
-    if (map.getSource('point'))
-        map.getSource('point').setData(geojson)
+    if (map.getSource(selectedFeature))
+        map.getSource(selectedFeature).setData(geojson)
 }
 
 function onUp(event) {
@@ -96,39 +110,76 @@ function onUp(event) {
 function addPoint(event) {
     // Creates the coordinate of the event
     const coords = Object.keys(event.lngLat).map((key) => event.lngLat[key]);
-
+    const indexID = index.toString()
     // Add the circle on the map
     map.addLayer({
-    id: index.toString(),
-    type: 'circle',
-    source: {
-        type: 'geojson',
-        data: {
-        type: 'FeatureCollection',
-        features: [
-            {
-                type: 'Feature',
-                properties: {},
-                geometry: {
-                    type: 'Point',
-                    coordinates: coords
+        id: indexID,
+        type: 'circle',
+        source: {
+            type: 'geojson',
+            data: {
+            type: 'FeatureCollection',
+            features: [
+                {
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'Point',
+                        coordinates: coords
+                    }
                 }
+            ]
             }
-        ]
-        }
-    },
-    paint: {
-        'circle-radius': 10,
-        'circle-color': '#f30'
-        }
+        },
+        paint: {
+            'circle-radius': 10,
+            'circle-color': '#f30'
+            }
     });
 
+    // 4.2. Change the style of the point and the cursor when the mouse enters the position of the point
+    // 'point' - target of the event (remain unsure of its real purpose)
+    map.on('mouseenter', indexID, (event) => {
+        selectedFeature = findLayer(event, id)
+        map.setPaintProperty(selectedFeature, 'circle-color', '#3bb2d0')
+        canvas.style.cursor = 'move'
+    })
+
+    // 4.3. Change the style of the point and the cursor when the mouse leaves the position of the point
+    map.on('mouseleave', indexID, (event) => {
+        selectedFeature = findLayer(event, id)
+        map.setPaintProperty(selectedFeature, 'circle-color', '#f30')
+        canvas.style.cursor = ''
+    })
+
+    // 4.4. Move the point when the user presses on the point
+    map.on('mousedown', indexID, (event) => {
+        // Prevent the user to drag the map
+        event.preventDefault()
+
+        canvas.style.cursor = 'grab'
+        selectedFeature = findLayer(event, id)
+        // 4.4.1 Updates the coordinates of the point while moving the mouse
+        map.on('mousemove', onMove)
+        map.once('mouseup', onUp)
+    })
+
+    // 4.5. Move the point when the user presses on the point
+    map.on('touchstart', indexID, (event) => {
+        if (event.points.length !== 1) return
+
+        event.preventDefault()
+        selectedFeature = findLayer(event, id)
+        map.on('touchmove', onMove)
+        map.on('touchend', onUp)
+    })
+
     // Adds the coordinates to the array initialized above
-    coordinates.push(coords)
-    id.push(index)
+    id.push(index.toString())
     index++
     // Draws the route using the newly updated array
-    getRoute(coordinates);
+
+    getRoute();
 }
 
 // Find the route using all coordinates (except for the starting coordinate)
@@ -143,7 +194,15 @@ function findRoute(coordinates) {
 }
 
 // API call to draw the route using the array of coordinates
-async function getRoute(coordinates) {
+async function getRoute() {
+    let coordinates = []
+    id.forEach ( element => {
+        if (map.getSource(element)) {
+            let feature = map.querySourceFeatures(element)
+            console.log(feature)
+        }
+    })
+
     if (coordinates.length > 1) {
         let result = findRoute(coordinates)
         // make a directions request using cycling profile
@@ -208,63 +267,6 @@ const canvas = map.getCanvasContainer()
 
 // 4. Load the initial coordinate as a point on the map
 map.on('load', () => {
-    map.addLayer({
-        id: 'point',
-        type: 'circle',
-        source: {
-            type: 'geojson',
-            data: {
-            type: 'FeatureCollection',
-            features: [
-                {
-                    type: 'Feature',
-                    properties: {},
-                    geometry: {
-                        type: 'Point',
-                        coordinates: [-73.561668, 45.508888]
-                    }
-                }
-            ]
-            }
-        },
-        paint: {
-            'circle-radius': 10,
-            'circle-color': '#f30'
-            }
-        });
     // 4.1. Add the control to the map
-    // map.addControl(routeCreationControl)
-
-    // 4.2. Change the style of the point and the cursor when the mouse enters the position of the point
-    // 'point' - target of the event (remain unsure of its real purpose)
-    map.on('mouseenter', 'point', () => {
-        map.setPaintProperty('point', 'circle-color', '#3bb2d0')
-        canvas.style.cursor = 'move'
-    })
-
-    // 4.3. Change the style of the point and the cursor when the mouse leaves the position of the point
-    map.on('mouseleave', 'point', () => {
-        map.setPaintProperty('point', 'circle-color', '#3887be')
-        canvas.style.cursor = ''
-    })
-
-    // 4.4. Move the point when the user presses on the point
-    map.on('mousedown', 'point', (event) => {
-        // Prevent the user to drag the map
-        event.preventDefault()
-
-        canvas.style.cursor = 'grab'
-        // 4.4.1 Updates the coordinates of the point while moving the mouse
-        map.on('mousemove', onMove)
-        map.once('mouseup', onUp)
-    })
-
-    // 4.5. Move the point when the user presses on the point
-    map.on('touchstart', 'point', (event) => {
-        if (event.points.length !== 1) return
-
-        event.preventDefault()
-        map.on('touchmove', onMove)
-        map.on('touchend', onUp)
-    })
+    map.addControl(routeCreationControl)
 });
