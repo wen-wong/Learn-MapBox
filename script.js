@@ -12,6 +12,42 @@ let selectedLayerId
 let distance
 let duration
 
+const data = {
+    'type': 'FeatureCollection',
+    'features': [
+        {
+            'type': 'Feature',
+            'properties': {
+                'name': 'uqam'
+            },
+            'geometry': {
+                'type': 'Point',
+                'coordinates': [-73.5597, 45.5149]
+            }
+        },
+        {
+            'type': 'Feature',
+            'properties': {
+                'name': 'oldport'
+            },
+            'geometry': {
+                'type': 'Point',
+                'coordinates': [-73.5544, 45.5075]
+            }
+        },
+        {
+            'type': 'Feature',
+            'properties': {
+                'name': 'chinatown'
+            },
+            'geometry': {
+                'type': 'Point',
+                'coordinates': [-73.5601, 45.5077]
+            }
+        }
+    ]
+}
+
 /**
  * RouteCreationControl - Allows the user to turn on/off to add points on the map
  */
@@ -74,13 +110,40 @@ class ResetRouteControl {
             // Layer - the drawing of the point
             // Source - the "tag" of the point
             // NOTE: CANNOT REMOVE LAYER IF YOU REMOVE ITS TAG (Source)
-            removeLayer('route')
+            removeLayer(this.map, 'route')
             
             // Remove all points
             for (let i = 0; i < id.length; i++) {
-                removeLayer(id[i])
+                removeLayer(this.map, id[i])
             }
             resetDrawing()
+        })
+        return this.container
+    }
+        
+    // Called when the map is removed
+    onRemove() {
+        this.container.parentNode.removeChild(this.container);
+        this.map = undefined;
+    }
+
+}
+
+/**
+ * LocationFilterControl - Allows the user to filter the locations on the map
+ */
+ class LocationFilterControl {
+    // Called once the controller is created
+    onAdd(map) {
+        this.map = map;
+        this.container = document.getElementById('filter-group')
+        this.container.className = 'mapboxgl-ctrl location-filter-control'
+        const input = document.createElement('input')
+        input.type = 'checkbox'
+        input.id = 
+        // Adds the listener to the button
+        this.container.addEventListener('click', () => {
+            
         })
         return this.container
     }
@@ -96,7 +159,7 @@ class ResetRouteControl {
 // Adds a point to the map
 function addPoint(event) {
     // Creates the coordinate of the event
-    const coords = Object.keys(event.lngLat).map((key) => event.lngLat[key]);
+    const coords = Object.keys(event.lngLat).map(key => event.lngLat[key]);
     const indexId = index.toString()
     // Adds the circle on the map
     map.addLayer({
@@ -140,7 +203,7 @@ function addPoint(event) {
     })
 
     // Move the point when the user presses on the point
-    map.on('mousedown', indexId, (event) => {
+    map.on('mousedown', indexId, event => {
         // Prevent the user to drag the map
         event.preventDefault()
 
@@ -152,7 +215,7 @@ function addPoint(event) {
     })
 
     // Move the point when the user presses on the point
-    map.on('touchstart', indexId, (event) => {
+    map.on('touchstart', indexId, event => {
         if (event.points.length !== 1) return
 
         event.preventDefault()
@@ -162,7 +225,7 @@ function addPoint(event) {
     })
 
     // Show the distance and duration of the route
-    map.on('click', indexId, (event) => {
+    map.on('click', indexId, event => {
         event.preventDefault()
         let coords = coordinates[indexId]
         new mapboxgl.Popup()
@@ -172,18 +235,18 @@ function addPoint(event) {
     })
 
     // Remove a point on the map
-    map.on('contextmenu', indexId, (event) => {
+    map.on('contextmenu', indexId, event => {
         event.preventDefault()
-        removeLayer('route')
-        removeLayer(indexId)
+        removeLayer(map, 'route')
+        removeLayer(map, indexId)
 
         if (id.length < 1 || coordinates.length < 1) {
             resetDrawing
             return
         }
         let removedId = id.indexOf(indexId)
-        id = id.filter((element, index) => index !== removedId )
-        coordinates = coordinates.filter((element, index) => index !== removedId )
+        id = id.filter((_, index) => index !== removedId )
+        coordinates = coordinates.filter((_, index) => index !== removedId )
         getRoute()
     })
 
@@ -198,7 +261,7 @@ function addPoint(event) {
 // API call to draw the route using the array of coordinates
 async function getRoute() {
     if (coordinates.length <= 1) {
-        removeLayer('route')
+        removeLayer(map, 'route')
         return
     }
     let result = findRoute(coordinates)
@@ -224,8 +287,7 @@ async function getRoute() {
     };
 
     // if the route already exists on the map, we'll reset it using setData
-    if (map.getSource('route'))
-        map.getSource('route').setData(geojson);
+    if (map.getSource('route')) map.getSource('route').setData(geojson);
     // otherwise, we'll make a new request
     else {
         map.addLayer({
@@ -249,31 +311,6 @@ async function getRoute() {
 }
 
 /**
- * MAIN SECTION - Initializing the map
- */
-
-// 1. Create the instance of the map
-const map = new mapboxgl.Map({
-    container: 'map',
-    style: 'mapbox://styles/mapbox/streets-v11',
-    center: [-73.561668, 45.508888], // starting position
-    zoom: 15
-});
-
-// 2. Initialize an instance of the canvas from the newly created map
-// Used to edit the style of objects within the map through the canvas
-const canvas = map.getCanvasContainer()
-
-// 3. Load the initial coordinate as a point on the map
-map.on('load', () => {
-    // 4.1. Add the control to the map
-    map.addControl(new mapboxgl.FullscreenControl())
-    map.addControl(new RouteCreationControl(false), 'bottom-right')
-    map.addControl(new ResetRouteControl, 'bottom-right')
-});
-
-
-/**
  * HELPER METHODS
  */
 
@@ -292,7 +329,7 @@ function findClosestLayerId(event, layers) {
             [event.point.x + 20, event.point.y + 20]
         ], 
         { layers: layers }
-    )
+        )
     if (result.length === 0) return
     return result[0].layer.id
 }
@@ -317,7 +354,7 @@ function onMove(event) {
 // Cancels the drag listener on the user's mouse
 function onUp() {
     canvas.style.cursor = ''
-
+    
     map.off('mousemove', onMove)
     map.off('touchmove', onMove)
 }
@@ -332,8 +369,79 @@ function findRoute(coords) {
     return result
 }
 
-function removeLayer(layerId) {
-    if (!map.getSource(layerId)) return
-    map.removeLayer(layerId)
-    map.removeSource(layerId)
+function removeLayer(currentMap, layerId) {
+    if (!currentMap.getSource(layerId)) return
+    currentMap.removeLayer(layerId)
+    currentMap.removeSource(layerId)
 }
+
+/**
+ * MAIN SECTION - Initializing the map
+ */
+
+// 1. Create the instance of the map
+const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/streets-v11',
+    center: [-73.561668, 45.508888], // starting position
+    zoom: 14
+});
+
+// 2. Initialize an instance of the canvas from the newly created map
+// Used to edit the style of objects within the map through the canvas
+const canvas = map.getCanvasContainer()
+
+// 3. Load the initial coordinate as a point on the map
+map.on('load', () => {
+
+    const filterGroup = document.getElementById('filter-group')
+
+    map.addSource('locations', {
+        type: 'geojson',
+        data: data
+    })
+
+    
+    for (const feature of data.features) {
+        let layerName = feature.properties.name
+        console.log(layerName)
+        if (map.getLayer(layerName)) return
+        map.addLayer({
+            'id': layerName,
+            'type': 'circle',
+            'source': 'locations',
+            'paint': {
+                'circle-radius': 10,
+                'circle-color': '#343fds'
+            }
+        })
+        const option = document.createElement('option')
+        option.value = layerName
+        option.innerHTML = layerName
+        filterGroup.appendChild(option)
+
+    }
+
+    filterGroup.addEventListener('change', () => {
+        let result = filterGroup.value
+        console.log(result.split(""))
+        console.log(map.getSource(result))
+        map.removeLayer(filterGroup.value)
+        map.removeSource(filterGroup.value)
+        // map.setPaintProperty(result, 'circle-opacity', 0)
+    })
+    // map.on('click', 'locations', event => {
+    //     event.preventDefault()
+    //     let layerName = findClosestLayerId('locations')
+    //     new mapboxgl.Popup()
+    //         .setLngLat(layerName.coordinates)
+    //         .setHTML(`<p>${layerName}</p>`)
+    //         .addTo(map)
+    // })
+
+    // 3.3. Add the controls to the map
+    map.addControl(new LocationFilterControl, 'top-right')
+    map.addControl(new mapboxgl.FullscreenControl(), 'top-right')
+    map.addControl(new RouteCreationControl(false), 'bottom-right')
+    map.addControl(new ResetRouteControl, 'bottom-right')
+});
