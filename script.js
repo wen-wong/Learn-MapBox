@@ -12,7 +12,23 @@ let selectedLayerId
 let distance
 let duration
 
-const data = {
+const data1 = {
+    'type': 'FeatureCollection',
+    'features': [
+        {
+            'type': 'Feature',
+            'properties': {
+                'name': 'chinatown'
+            },
+            'geometry': {
+                'type': 'Point',
+                'coordinates': [-73.5601, 45.5077]
+            }
+        }
+    ]
+}
+
+const data2 = {
     'type': 'FeatureCollection',
     'features': [
         {
@@ -33,16 +49,6 @@ const data = {
             'geometry': {
                 'type': 'Point',
                 'coordinates': [-73.5544, 45.5075]
-            }
-        },
-        {
-            'type': 'Feature',
-            'properties': {
-                'name': 'chinatown'
-            },
-            'geometry': {
-                'type': 'Point',
-                'coordinates': [-73.5601, 45.5077]
             }
         }
     ]
@@ -396,48 +402,72 @@ map.on('load', () => {
 
     const filterGroup = document.getElementById('filter-group')
 
-    map.addSource('locations', {
+    map.addSource('locations1', {
         type: 'geojson',
-        data: data
+        data: data1
     })
 
+    map.addSource('locations2', {
+        type: 'geojson',
+        data: data2
+    })
+
+    map.addLayer({
+        'id': 'locations1',
+        'type': 'circle',
+        'source': 'locations1',
+        'layout': {
+        // Make the layer visible by default.
+            'visibility': 'visible'
+        },
+        'paint': {
+            'circle-radius': 8,
+            'circle-color': 'rgba(55,148,179,1)'
+        }
+    });
+
+    map.addLayer({
+        'id': 'locations2',
+        'type': 'circle',
+        'source': 'locations2',
+        'layout': {
+        // Make the layer visible by default.
+            'visibility': 'visible'
+        },
+        'paint': {
+            'circle-radius': 8,
+            'circle-color': '#006400'
+        }
+    });
+    const layers = ['locations1', 'locations2']
+    const group = document.getElementById('filter-group')
+
+    let option = document.createElement('option')
+    option.id = 'all'
+    option.textContent = 'all'
+    group.appendChild(option)
+
+    layers.forEach ( layer => {
+        let option = document.createElement('option')
+        option.id = layer
+        option.textContent = layer
+        group.appendChild(option)
+    })
+
+    group.addEventListener('change', (event) => {
+        let chosenLayer = event.target.value
+        if (chosenLayer === 'all') {
+            layers.forEach( layer => {
+                map.setLayoutProperty(layer, 'visibility', 'visible')
+            })
+        } else {
+            layers.forEach( layer => {
+                let visibility = layer === chosenLayer ? 'visible' : 'none'
+                map.setLayoutProperty(layer, 'visibility', visibility)
+            })
+        }
+    })
     
-    for (const feature of data.features) {
-        let layerName = feature.properties.name
-        console.log(layerName)
-        if (map.getLayer(layerName)) return
-        map.addLayer({
-            'id': layerName,
-            'type': 'circle',
-            'source': 'locations',
-            'paint': {
-                'circle-radius': 10,
-                'circle-color': '#343fds'
-            }
-        })
-        const option = document.createElement('option')
-        option.value = layerName
-        option.innerHTML = layerName
-        filterGroup.appendChild(option)
-
-    }
-
-    filterGroup.addEventListener('change', () => {
-        let result = filterGroup.value
-        console.log(result.split(""))
-        console.log(map.getSource(result))
-        map.removeLayer(filterGroup.value)
-        map.removeSource(filterGroup.value)
-        // map.setPaintProperty(result, 'circle-opacity', 0)
-    })
-    // map.on('click', 'locations', event => {
-    //     event.preventDefault()
-    //     let layerName = findClosestLayerId('locations')
-    //     new mapboxgl.Popup()
-    //         .setLngLat(layerName.coordinates)
-    //         .setHTML(`<p>${layerName}</p>`)
-    //         .addTo(map)
-    // })
 
     // 3.3. Add the controls to the map
     map.addControl(new LocationFilterControl, 'top-right')
@@ -445,3 +475,7 @@ map.on('load', () => {
     map.addControl(new RouteCreationControl(false), 'bottom-right')
     map.addControl(new ResetRouteControl, 'bottom-right')
 });
+
+map.on('idle', () => {
+    
+})
